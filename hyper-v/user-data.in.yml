@@ -1,0 +1,13 @@
+#cloud-config
+locale: en_US.UTF8
+timezone: Asia/Tokyo
+package_upgrade: true
+package_reboot_if_required: true
+apt:
+  primary:
+    arches:
+    - amd64
+    - default
+    uri: http://jp.archive.ubuntu.com/ubuntu/
+#chpasswd:
+#  expire: false
