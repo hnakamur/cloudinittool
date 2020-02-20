@@ -157,12 +157,12 @@ func runAddSshKeyCmd(args []string) error {
 	data.SSHAuthorizeKeys = append(data.SSHAuthorizeKeys, string(pubKey))
 	data.WriteFiles = []WriteFile{
 		{
-			Path:        "/run/priv_key",
+			Path:        "/priv_key",
 			Content:     string(privKey),
 			Permissions: "0400",
 		},
 		{
-			Path:        "/run/pub_key",
+			Path:        "/pub_key",
 			Content:     string(pubKey),
 			Permissions: "0600",
 		},
@@ -197,12 +197,13 @@ func runMakeISOCmd(args []string) error {
 		fmt.Fprintf(fs.Output(), makeISOCmdUsage, cmdName)
 		fs.PrintDefaults()
 	}
-	in := fs.String("in", "", "input user-data yaml file. required.")
+	userDataFilename := fs.String("user-data", "", "input user-data yaml file. required.")
+	metaDataFilename := fs.String("meta-data", "", "input meta-data yaml file. optional.")
 	out := fs.String("out", "", "output ISO image file. required.")
 	fs.Parse(args)
 
-	if *in == "" {
-		return newRequiredOptionError(fs, "in")
+	if *userDataFilename == "" {
+		return newRequiredOptionError(fs, "user-data")
 	}
 	if *out == "" {
 		return newRequiredOptionError(fs, "out")
@@ -223,11 +224,18 @@ func runMakeISOCmd(args []string) error {
 		return err
 	}
 
-	if err := addFileToISO(isoFS, "meta-data", []byte{}); err != nil {
+	metaData := []byte{}
+	if *metaDataFilename != "" {
+		metaData, err = ioutil.ReadFile(*metaDataFilename)
+		if err != nil {
+			return err
+		}
+	}
+	if err := addFileToISO(isoFS, "meta-data", metaData); err != nil {
 		return err
 	}
 
-	userData, err := ioutil.ReadFile(*in)
+	userData, err := ioutil.ReadFile(*userDataFilename)
 	if err != nil {
 		return err
 	}
