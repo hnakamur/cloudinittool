@@ -30,8 +30,8 @@ func (e *requiredOptionError) Error() string {
 const globalUsage = `Usage: %s <subcommand> [options]
 
 subcommands:
-  add-ssh-key    Add ssh key to user-data yaml.
-  make-iso       Make an ISO image from user-data yaml.
+  modify-user-data    Modify user-data.
+  make-iso            Make an ISO image
 
 Run %s <subcommand> -h to show help for subcommand.
 `
@@ -57,8 +57,8 @@ func run() int {
 
 	var err error
 	switch args[0] {
-	case "add-ssh-key":
-		err = runAddSshKeyCmd(args[1:])
+	case "modify-user-data":
+		err = runModifyUserDataCmd(args[1:])
 	case "make-iso":
 		err = runMakeISOCmd(args[1:])
 	default:
@@ -66,7 +66,7 @@ func run() int {
 		return 2
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err.Error())
 		var roerr *requiredOptionError
 		if errors.As(err, &roerr) {
 			roerr.fs.Usage()
@@ -77,21 +77,21 @@ func run() int {
 	return 0
 }
 
-const addSshKeyCmdUsage = `Usage: %s add-ssh-key [options]
+const modifyUserDataCmdUsage = `Usage: %s modify-user-data [options]
 
 options:
 `
 
-func runAddSshKeyCmd(args []string) error {
-	fs := flag.NewFlagSet("add-ssh-key", flag.ExitOnError)
+func runModifyUserDataCmd(args []string) error {
+	fs := flag.NewFlagSet("modify-user-data", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), addSshKeyCmdUsage, cmdName)
+		fmt.Fprintf(fs.Output(), modifyUserDataCmdUsage, cmdName)
 		fs.PrintDefaults()
 	}
 	in := fs.String("in", "", "input user-data yaml file. required.")
 	out := fs.String("out", "", "output user-data yaml file. required.")
 	inputPasswd := fs.Bool("passwd", false, "show prompt to input default user password. optional.")
-	pubKeyFilename := fs.String("pub", "", "user ssh public key. optional.")
+	pubKeyFilename := fs.String("pub-key", "", "add ssh public key to ssh_authorized_keys. optional.")
 	fs.Parse(args)
 
 	if *in == "" {
@@ -134,17 +134,16 @@ func runAddSshKeyCmd(args []string) error {
 			return err
 		}
 
-		var keys []string
+		var keys []interface{}
 		sshAuthorizedKeys, ok := userData["ssh_authorized_keys"]
 		if ok {
-			keys, ok = sshAuthorizedKeys.([]string)
+			keys, ok = sshAuthorizedKeys.([]interface{})
 			if !ok {
+				fmt.Printf("sshAuthorizedKeys type=%T\n", sshAuthorizedKeys)
 				return errors.New("ssh_authorized_keys must have a string value")
 			}
-			keys = append(keys, string(pubKey))
-		} else {
-			keys = []string{string(pubKey)}
 		}
+		keys = append(keys, string(pubKey))
 		userData["ssh_authorized_keys"] = keys
 	}
 

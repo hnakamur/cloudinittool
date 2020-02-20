@@ -1,4 +1,4 @@
-module github.com/hnakamur/cloudinituserdatatool
+module github.com/hnakamur/cloudinittool
 
 go 1.13
 
