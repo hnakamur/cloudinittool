@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/diskfs/go-diskfs/filesystem/iso9660"
 	"github.com/goccy/go-yaml"
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type requiredOptionError struct {
@@ -87,8 +90,8 @@ func runAddSshKeyCmd(args []string) error {
 	}
 	in := fs.String("in", "", "input user-data yaml file. required.")
 	out := fs.String("out", "", "output user-data yaml file. required.")
-	privKeyFilename := fs.String("priv", "", "user ssh private key. required.")
-	pubKeyFilename := fs.String("pub", "", "user ssh public key. required.")
+	inputPasswd := fs.Bool("passwd", false, "show prompt to input default user password. optional.")
+	pubKeyFilename := fs.String("pub", "", "user ssh public key. optional.")
 	fs.Parse(args)
 
 	if *in == "" {
@@ -97,75 +100,52 @@ func runAddSshKeyCmd(args []string) error {
 	if *out == "" {
 		return newRequiredOptionError(fs, "out")
 	}
-	if *privKeyFilename == "" {
-		return newRequiredOptionError(fs, "priv")
-	}
-	if *pubKeyFilename == "" {
-		return newRequiredOptionError(fs, "pub")
-	}
 
-	type WriteFile struct {
-		Path    string `yaml:"path"`
-		Content string `yaml:"content"`
-
-		// NOTE: We cannot have Owner here
-		// See https://bugs.launchpad.net/cloud-init/+bug/1486113
-		// Owner string `yaml:"owner"`
-
-		Permissions string `yaml:"permissions"`
+	var password []byte
+	if *inputPasswd {
+		var err error
+		password, err = readPassword()
+		if err != nil {
+			return err
+		}
 	}
 
-	type Chpasswd struct {
-		Expire bool `yaml:"expire"`
-	}
-
-	type AptRepo struct {
-		Arches []string `yaml:"arches"`
-		URI    string   `yaml:"uri"`
-	}
-
-	type UserData struct {
-		Locale                  string             `yaml:"locale"`
-		Timezone                string             `yaml:"timezone"`
-		PackageUpgrade          bool               `yaml:"package_upgrade"`
-		PackageRebootIfRequired bool               `yaml:"package_reboot_if_required"`
-		Apt                     map[string]AptRepo `yaml:"apt"`
-		Password                string             `yaml:"password"`
-		Chpasswd                Chpasswd           `yaml:"chpasswd"`
-		SSHAuthorizeKeys        []string           `yaml:"ssh_authorized_keys"`
-		WriteFiles              []WriteFile        `yaml:"write_files"`
-	}
-
-	var data UserData
 	inData, err := ioutil.ReadFile(*in)
 	if err != nil {
 		return err
 	}
-	if err := yaml.Unmarshal(inData, &data); err != nil {
+	var userData map[string]interface{}
+	if err := yaml.Unmarshal(inData, &userData); err != nil {
 		return err
 	}
 
-	privKey, err := ioutil.ReadFile(*privKeyFilename)
-	if err != nil {
-		return err
-	}
-	pubKey, err := ioutil.ReadFile(*pubKeyFilename)
-	if err != nil {
-		return err
+	if *inputPasswd {
+		const cost = 11
+		passHash, err := bcrypt.GenerateFromPassword(password, cost)
+		if err != nil {
+			return err
+		}
+		userData["password"] = string(passHash)
 	}
 
-	data.SSHAuthorizeKeys = append(data.SSHAuthorizeKeys, string(pubKey))
-	data.WriteFiles = []WriteFile{
-		{
-			Path:        "/priv_key",
-			Content:     string(privKey),
-			Permissions: "0400",
-		},
-		{
-			Path:        "/pub_key",
-			Content:     string(pubKey),
-			Permissions: "0600",
-		},
+	if *pubKeyFilename != "" {
+		pubKey, err := ioutil.ReadFile(*pubKeyFilename)
+		if err != nil {
+			return err
+		}
+
+		var keys []string
+		sshAuthorizedKeys, ok := userData["ssh_authorized_keys"]
+		if ok {
+			keys, ok = sshAuthorizedKeys.([]string)
+			if !ok {
+				return errors.New("ssh_authorized_keys must have a string value")
+			}
+			keys = append(keys, string(pubKey))
+		} else {
+			keys = []string{string(pubKey)}
+		}
+		userData["ssh_authorized_keys"] = keys
 	}
 
 	file, err := os.Create(*out)
@@ -176,7 +156,7 @@ func runAddSshKeyCmd(args []string) error {
 
 	fmt.Fprintln(file, "#cloud-config")
 
-	b, err := yaml.Marshal(data)
+	b, err := yaml.Marshal(userData)
 	if err != nil {
 		return err
 	}
@@ -184,6 +164,34 @@ func runAddSshKeyCmd(args []string) error {
 		return err
 	}
 	return nil
+}
+
+func readPassword() ([]byte, error) {
+	for {
+		if _, err := os.Stdout.Write([]byte("Password: ")); err != nil {
+			return nil, err
+		}
+		passwd1, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := os.Stdout.Write([]byte("\nConfirm password: ")); err != nil {
+			return nil, err
+		}
+		passwd2, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+			return nil, err
+		}
+
+		if bytes.Equal(passwd1, passwd2) {
+			return passwd1, nil
+		}
+	}
 }
 
 const makeISOCmdUsage = `Usage: %s make-iso [options]
@@ -199,6 +207,7 @@ func runMakeISOCmd(args []string) error {
 	}
 	userDataFilename := fs.String("user-data", "", "input user-data yaml file. required.")
 	metaDataFilename := fs.String("meta-data", "", "input meta-data yaml file. optional.")
+	networkConfigFilename := fs.String("network-config", "", "input network-config yaml file. optional.")
 	out := fs.String("out", "", "output ISO image file. required.")
 	fs.Parse(args)
 
@@ -241,6 +250,16 @@ func runMakeISOCmd(args []string) error {
 	}
 	if err := addFileToISO(isoFS, "user-data", userData); err != nil {
 		return err
+	}
+
+	if *networkConfigFilename != "" {
+		networkConfig, err := ioutil.ReadFile(*networkConfigFilename)
+		if err != nil {
+			return err
+		}
+		if err := addFileToISO(isoFS, "network-config", networkConfig); err != nil {
+			return err
+		}
 	}
 
 	err = isoFS.Finalize(iso9660.FinalizeOptions{
