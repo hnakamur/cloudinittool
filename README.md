@@ -1,7 +1,7 @@
-cloudinituserdatatool
-=====================
+cloudinittool
+=============
 
-cloudinituserdatatool is a small command line tool for managing cloud-init user-data.
+cloudinittool is a small command line tool for managing cloud-init local datasource.
 
 It it not a general tool, but a minimal tool just for my needs to boot a Ubuntu VM on
 [multipass](https://github.com/canonical/multipass) and Hyper-V.
@@ -9,42 +9,48 @@ It it not a general tool, but a minimal tool just for my needs to boot a Ubuntu 
 ## Usage
 
 ```
-Usage: cloudinituserdatatool <subcommand> [options]
+Usage: cloudinittool <subcommand> [options]
 
 subcommands:
-  add-ssh-key    Add ssh key to user-data yaml.
-  make-iso       Make an ISO image from user-data yaml.
+  modify-user-data    Modify user-data.
+  make-iso            Make an ISO image
 
-Run cloudinituserdatatool <subcommand> -h to show help for subcommand.
+Run cloudinittool <subcommand> -h to show help for subcommand.
 ```
 
 ```
-Usage: cloudinituserdatatool add-ssh-key [options]
+Usage: cloudinittool modify-user-data [options]
 
 options:
   -in string
         input user-data yaml file. required.
   -out string
         output user-data yaml file. required.
-  -priv string
-        user ssh private key. required.
-  -pub string
-        user ssh public key. required.
+  -passwd
+        show prompt to input default user password. optional.
+  -pub-key string
+        add ssh public key to ssh_authorized_keys. optional.
 ```
 
 ```
-Usage: cloudinituserdatatool make-iso [options]
+Usage: cloudinittool make-iso [options]
 
 options:
-  -in string
-        input user-data yaml file. required.
+  -meta-data string
+        input meta-data yaml file. optional.
+  -network-config string
+        input network-config yaml file. optional.
   -out string
         output ISO image file. required.
+  -user-data string
+        input user-data yaml file. required.
 ```
 
 ## Example
 
-The input file for `add-ssh-key` subcommand is like below:
+### Add `password` and `ssh_authorized_keys` to `user-data` file
+
+The input file for `modify-user-data` subcommand is like below:
 
 `user-data.in.yml`
 
@@ -60,20 +66,8 @@ apt:
     - amd64
     - default
     uri: http://jp.archive.ubuntu.com/ubuntu/
-password: _YOUR_PASSWORD_HERE_
 chpasswd:
   expire: false
-```
-
-Note although cloud-init user-data supports a lot of [modules](https://cloudinit.readthedocs.io/en/latest/topics/modules.html), this tool supports only configurations in the above example.
-
-The `password` in `user-data.in.yml` may be a plain text or the output of `mkpasswd`.
-
-Run `mkpasswd` to print hash of your password, for example:
-
-```
-$ mkpasswd --method=SHA-512 --rounds=4096
-Password: <input password for the default user ubuntu on VM>
 ```
 
 Generate ssh key pair, for example:
@@ -82,11 +76,12 @@ Generate ssh key pair, for example:
 ssh-keygen -t ed25519 -f ~/.ssh/vm.id_ed25519 -C vm -N ''
 ```
 
-Run the following command to add a ssh key pair to cloud-init user-data.
+Run the following command to add the password and an authorized key for the default user.
+You can input the password at `Password:` prompt and the `Confirm password:` prompt.
 
 ```
-cloudinituserdatatool add-ssh-key -in user-data.in.yml -out user-data \
-  -priv ~/.ssh/vm.id_ed25519 -pub ~/.ssh/vm.id_ed25519.pub
+cloudinittool modify-user-data -in user-data.in.yml -out user-data \
+  -passwd -pub-key ~/.ssh/vm.id_ed25519.pub
 ```
 
 The output file `user-data` is like below:
@@ -103,28 +98,15 @@ apt:
     - amd64
     - default
     uri: http://jp.archive.ubuntu.com/ubuntu/
-password: _YOUR_PASSWORD_HERE_
+password: $2a$11$...HASHED_PASSWORD_HERE...
 chpasswd:
   expire: false
 ssh_authorized_keys:
 - |
-  ssh-ed25519 ...
-write_files:
-- path: /run/priv_key
-  content: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    ...
-    -----END OPENSSH PRIVATE KEY-----
-  permissions: "0400"
-- path: /run/pub_key
-  content: |
-    ssh-ed25519 ...
-  permissions: "0600"
+  ssh-ed25519 ...YOUR_PUBLIC_KEY_HERE...
 ```
 
-Note the `path` of ssh key pair above is not like `/home/ubuntu/.ssh/id_ed25519*`.
-This is because files in `write_files` are written before the home directory is created.
-So you need to move the ssh key pair yourself after a VM starts.
+### Use user-data file when launching a VM with multipass
 
 You can use pass this `user-data` file to [multipass launch](https://discourse.ubuntu.com/t/multipass-launch-command/10846) with the `--cloud-init` option.
 
@@ -132,8 +114,24 @@ You can use pass this `user-data` file to [multipass launch](https://discourse.u
 multipass launch --name primary --cpus 2 --mem 4G --disk 100G --cloud-init user-data
 ```
 
+### Make a data source ISO image for Hyper-V
+
+An example `network-config` in [Networking Config Version 2](https://cloudinit.readthedocs.io/en/latest/topics/network-config-format-v2.html#network-config-v2) format:
+
+```
+version: 2
+ethernets:
+    eth0:
+        dhcp4: false
+        addresses:
+            - 192.168.254.2/24
+        gateway4: 192.168.254.1
+        nameservers:
+            addresses: [192.168.254.1]
+```
+
 You can make an ISO image to pass to launch a VM on Hyper-V, for example:
 
 ```
-cloudinituserdatatool make-iso -in user-data -out cloud-init.iso
+cloudinittool make-iso -user-data user-data -network-config network-config -out cloud-init.iso
 ```
