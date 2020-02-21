@@ -8,9 +8,10 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/GehirnInc/crypt"
+	_ "github.com/GehirnInc/crypt/sha512_crypt"
 	"github.com/diskfs/go-diskfs/filesystem/iso9660"
 	"github.com/goccy/go-yaml"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -120,8 +121,8 @@ func runModifyUserDataCmd(args []string) error {
 	}
 
 	if *inputPasswd {
-		const cost = 11
-		passHash, err := bcrypt.GenerateFromPassword(password, cost)
+		crypt := crypt.SHA512.New()
+		passHash, err := crypt.Generate(password, nil)
 		if err != nil {
 			return err
 		}
