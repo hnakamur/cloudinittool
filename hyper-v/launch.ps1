@@ -15,7 +15,7 @@ $cloudInitIso = "$($vmPath)\metadata.iso"
 & ssh-keygen -t ed25519 -f "${Env:USERPROFILE}\.ssh\vm.id_ed25519" -C vm
 & cloudinittool modify-user-data -in user-data.in.yml `
   -pub-key "${Env:USERPROFILE}\.ssh\vm.id_ed25519.pub" `
-  -out user-data
+  -passwd -out user-data
 & cloudinittool make-iso -user-data user-data `
   -network-config network-config -out $cloudInitIso
 

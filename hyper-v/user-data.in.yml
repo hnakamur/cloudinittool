@@ -9,5 +9,5 @@ apt:
     - amd64
     - default
     uri: http://jp.archive.ubuntu.com/ubuntu/
-#chpasswd:
-#  expire: false
+chpasswd:
+  expire: false
