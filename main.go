@@ -33,6 +33,7 @@ const globalUsage = `Usage: %s <subcommand> [options]
 subcommands:
   modify-user-data    Modify user-data.
   make-iso            Make an ISO image
+  version             Show version
 
 Run %s <subcommand> -h to show help for subcommand.
 `
@@ -42,6 +43,7 @@ func main() {
 }
 
 var cmdName = os.Args[0]
+var version string
 
 func run() int {
 	flag.Usage = func() {
@@ -62,6 +64,8 @@ func run() int {
 		err = runModifyUserDataCmd(args[1:])
 	case "make-iso":
 		err = runMakeISOCmd(args[1:])
+	case "version":
+		err = runShowVersion(args[1:])
 	default:
 		flag.Usage()
 		return 2
@@ -76,6 +80,11 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+func runShowVersion(args []string) error {
+	fmt.Println(version)
+	return nil
 }
 
 const modifyUserDataCmdUsage = `Usage: %s modify-user-data [options]
