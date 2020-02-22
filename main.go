@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"github.com/GehirnInc/crypt"
 	_ "github.com/GehirnInc/crypt/sha512_crypt"
@@ -42,7 +43,7 @@ func main() {
 	os.Exit(run())
 }
 
-var cmdName = os.Args[0]
+var cmdName = filepath.Base(os.Args[0])
 var version string
 
 func run() int {
