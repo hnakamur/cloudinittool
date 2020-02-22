@@ -25,9 +25,10 @@ $cloudInitIso = "$($vmPath)\metadata.iso"
 Resize-VHD -Path $vhdx -SizeBytes 100GB
 
 # Create new virtual machine and start it
-new-vm $VMName -MemoryStartupBytes 4096mb -VHDPath $vhdx -Generation 1 `
+New-VM $VMName -MemoryStartupBytes 4096mb -VHDPath $vhdx -Generation 1 `
                -SwitchName $virtualSwitchName -Path $vmPath | Out-Null
-set-vm -Name $VMName -ProcessorCount 2
+Set-VM -Name $VMName -ProcessorCount 2
+Set-VMMemory -VMName $VMNAME -DynamicMemoryEnabled $false
 Set-VMDvdDrive -VMName $VMName -Path $cloudInitIso
 Start-VM $VMName
 
