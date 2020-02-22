@@ -127,7 +127,7 @@ ethernets:
             - 192.168.254.2/24
         gateway4: 192.168.254.1
         nameservers:
-            addresses: [192.168.254.1]
+            addresses: [8.8.8.8, 8.8.4.4]
 ```
 
 You can make an ISO image to pass to launch a VM on Hyper-V, for example:
