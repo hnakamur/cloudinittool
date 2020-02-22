@@ -98,7 +98,7 @@ apt:
     - amd64
     - default
     uri: http://jp.archive.ubuntu.com/ubuntu/
-password: $2a$11$...HASHED_PASSWORD_HERE...
+password: $6$...SALT...$...HASHED_PASSWORD_HERE...
 chpasswd:
   expire: false
 ssh_authorized_keys:
