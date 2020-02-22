@@ -44,7 +44,12 @@ func main() {
 }
 
 var cmdName = filepath.Base(os.Args[0])
-var version string
+
+var (
+	version string
+	commit  string
+	date    string
+)
 
 func run() int {
 	flag.Usage = func() {
@@ -84,7 +89,9 @@ func run() int {
 }
 
 func runShowVersion(args []string) error {
-	fmt.Println(version)
+	fmt.Printf("Version: %s\n", version)
+	fmt.Printf("Commit:  %s\n", commit)
+	fmt.Printf("Date:    %s\n", date)
 	return nil
 }
 
